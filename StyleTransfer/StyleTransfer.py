@@ -50,14 +50,7 @@ def loadImages(image1Name, image2Name):
     return image1.to(device, torch.float), image2.to(device, torch.float)
 
 
-def loadImage(name):
-    image = Image.open(name)
-    image = image.crop((0, 0, imageSize, imageSize))
-    image = loader(image).unsqueeze(0)
-    return image.to(device, torch.float)
-
-
-styleImage, contentImage = loadImages('images/van4.jpg', 'images/portland.jpg')
+styleImage, contentImage = loadImages('images/picasso.jpg', 'images/me3.jpg')
 
 
 print(styleImage.size())
@@ -69,12 +62,6 @@ def plotTensor(tensor):
     image = image.squeeze(0)
     image = transforms.ToPILImage()(image)
     plt.imshow(image)
-    plt.pause(1)
-
-plt.figure()
-#plotTensor(styleImage)
-#plotTensor(contentImage)
-
 
 class ContentLoss(nn.Module):
     def __init__(self, target):
@@ -134,7 +121,9 @@ def getLayer(layer, i):
 
         # Can set pooling type here. Default is Max2d
         layerName = 'maxpool{}'.format(i)
-        layer = nn.AvgPool2d(layer.kernel_size) # TODO: Need to get kernel size
+
+        #layerName = 'avgpool{}'.format(i)
+        layer = nn.AvgPool2d(layer.kernel_size)
     
     elif isinstance(layer, nn.BatchNorm2d):
         layerName = 'bachnorm{}'.format(i)
@@ -149,8 +138,6 @@ def addLayer(i, image, model, LossType, lossName, losses):
 
 def createModel(cnn, normMean, normStd, styleImage, contentImage):
 
-    #cnn = copy.deepcopy(cnn)
-
     normalizer = Normalization(normMean, normStd).to(device)
 
     contentLosses = []
@@ -161,7 +148,8 @@ def createModel(cnn, normMean, normStd, styleImage, contentImage):
 
     # Walk through the vgg model layer by layer
     i = 0
-    for layer in cnn.children():
+    ll = 0
+    for idx, layer in enumerate(cnn.children()):
 
         # Here we get the current layer, and can interact 
         # with/change the layer as necessary
@@ -171,12 +159,16 @@ def createModel(cnn, normMean, normStd, styleImage, contentImage):
         model.add_module(layerName, layer)
 
         if layerName in contentLayers:
+            ll = idx
             addLayer(i, contentImage, model, ContentLoss, 
                      'contentloss', contentLosses)
 
         elif layerName in styleLayers:
+            ll = idx
             addLayer(i, styleImage, model, StyleLoss, 
                      'styleloss', styleLosses)
+
+    model = model[0:idx]
 
     return model, styleLosses, contentLosses
 
@@ -228,4 +220,4 @@ def run(cnn, normMean, normStd, contentImage, styleImage,
     plt.show()
 
 
-run(cnn, normMean, normStd, contentImage, styleImage, inputImage, 50, 1e8, 1)
+run(cnn, normMean, normStd, contentImage, styleImage, inputImage, 55, 1e9, 1)
