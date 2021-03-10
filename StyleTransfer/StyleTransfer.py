@@ -14,7 +14,7 @@ import torchvision.models as models
 
 device = torch.device("cuda")
 
-imageSize = 512
+imageSize = 386
 
 loader = transforms.Compose([transforms.Resize(imageSize), transforms.ToTensor()])
 
@@ -50,7 +50,7 @@ def loadImages(image1Name, image2Name):
     return image1.to(device, torch.float), image2.to(device, torch.float)
 
 
-styleImage, contentImage = loadImages('images/picasso.jpg', 'images/me3.jpg')
+styleImage, contentImage = loadImages('images/van2.jpg', 'images/iss2.jpg')
 
 
 print(styleImage.size())
@@ -75,7 +75,6 @@ class ContentLoss(nn.Module):
 class StyleLoss(nn.Module):
     def __init__(self, target):
         super().__init__()
-
         self.target = self.gramMatrix(target)
 
     def gramMatrix(self, target):
@@ -83,7 +82,7 @@ class StyleLoss(nn.Module):
         a, b, c, d = target.size()
         features = target.view(a * b, c * d)
         gram = torch.matmul(features, features.t())
-        gram = gram.div(a * b * c * d) # normalize matrix
+        gram = gram.div(features.numel()) # normalize matrix
         return gram
 
     def forward(self, input):
@@ -104,11 +103,11 @@ cnn         = models.vgg19(True).features.to(device).eval()
 normMean    = torch.tensor([0.485, 0.456, 0.406]).to(device)
 normStd     = torch.tensor([0.229, 0.224, 0.225]).to(device)
 
-contentLayers   = ['conv4']
+contentLayers   = ['conv4', 'conv5']
 styleLayers     = ['conv1', 'conv2', 'conv3', 'conv4', 'conv5']
 
 def getLayer(layer, i):
-    layerName = ''
+    
     if isinstance(layer, nn.Conv2d):
         i += 1
         layerName = 'conv{}'.format(i)
@@ -120,9 +119,9 @@ def getLayer(layer, i):
     elif isinstance(layer, nn.MaxPool2d):
 
         # Can set pooling type here. Default is Max2d
-        layerName = 'maxpool{}'.format(i)
+        #layerName = 'maxpool{}'.format(i)
 
-        #layerName = 'avgpool{}'.format(i)
+        layerName = 'avgpool{}'.format(i)
         layer = nn.AvgPool2d(layer.kernel_size)
     
     elif isinstance(layer, nn.BatchNorm2d):
@@ -130,7 +129,7 @@ def getLayer(layer, i):
 
     return layer, layerName, i
 
-def addLayer(i, image, model, LossType, lossName, losses):
+def addLossLayer(i, image, model, LossType, lossName, losses):
     target  = model(image).detach()
     loss    = LossType(target)
     model.add_module(lossName + str(i), loss)
@@ -147,7 +146,7 @@ def createModel(cnn, normMean, normStd, styleImage, contentImage):
     model = nn.Sequential(normalizer)
 
     # Walk through the vgg model layer by layer
-    i = 0
+    i  = 0
     ll = 0
     for idx, layer in enumerate(cnn.children()):
 
@@ -160,22 +159,24 @@ def createModel(cnn, normMean, normStd, styleImage, contentImage):
 
         if layerName in contentLayers:
             ll = idx
-            addLayer(i, contentImage, model, ContentLoss, 
+            addLossLayer(i, contentImage, model, ContentLoss, 
                      'contentloss', contentLosses)
 
         elif layerName in styleLayers:
             ll = idx
-            addLayer(i, styleImage, model, StyleLoss, 
+            addLossLayer(i, styleImage, model, StyleLoss, 
                      'styleloss', styleLosses)
 
-    model = model[0:idx]
+    model = model[0:(ll + len(styleLayers) + len(contentLayers) + 1)]
 
     return model, styleLosses, contentLosses
 
 
-
+# White noise image
 #inputImage = torch.randn(contentImage.data.size(), device=device)
 inputImage = contentImage.clone()
+
+
 
 def calculateLoss(epoch, optimizer, inputImage, 
                   model, styleLosses, contentLosses,
@@ -186,10 +187,10 @@ def calculateLoss(epoch, optimizer, inputImage,
 
     model(inputImage)
 
-    styleLoss   = sum([s.loss for s in styleLosses])
-    contentLoss = sum([c.loss for c in contentLosses])
+    styleLoss   = sum(s.loss for s in styleLosses)
+    contentLoss = sum(c.loss for c in contentLosses)
 
-    styleLoss *= styleWeight
+    styleLoss   *= styleWeight
     contentLoss *= contentWeight
 
     loss = styleLoss + contentLoss
@@ -220,4 +221,4 @@ def run(cnn, normMean, normStd, contentImage, styleImage,
     plt.show()
 
 
-run(cnn, normMean, normStd, contentImage, styleImage, inputImage, 55, 1e9, 1)
+run(cnn, normMean, normStd, contentImage, styleImage, inputImage, 50, 1e10, 1)
