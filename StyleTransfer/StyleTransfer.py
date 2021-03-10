@@ -27,22 +27,22 @@ def loadImages(image1Name, image2Name):
 
     width = h1
     height = v1
-    ideal_width = h2
-    ideal_height = v2
-    ideal_aspect = h2 / float(v2)
+    idealWidth = h2
+    idealHeight = v2
+    idealAspect = h2 / float(v2)
     aspect = h1 / float(v1)
-    if aspect > ideal_aspect:
+    if aspect > idealAspect:
         # Then crop the left and right edges:
-        new_width = int(ideal_aspect * height)
+        new_width = int(idealAspect * height)
         offset = (width - new_width) / 2
         resize = (offset, 0, width - offset, height)
     else:
         # ... crop the top and bottom:
-        new_height = int(width / ideal_aspect)
+        new_height = int(width / idealAspect)
         offset = (height - new_height) / 2
         resize = (0, offset, width, height - offset)
 
-    image1 = image1.crop(resize).resize((ideal_width, ideal_height), Image.ANTIALIAS)
+    image1 = image1.crop(resize).resize((idealWidth, idealHeight), Image.ANTIALIAS)
 
     image1 = loader(image1).unsqueeze(0)
     image2 = loader(image2).unsqueeze(0)
